@@ -221,7 +221,7 @@ xs = [
 ]
 ys = [1.0, -1.0, -1.0, 1.0] # desired targets
 
-for k in range(20):
+for k in range(2000):
   
   # forward pass
   ypred = [mlp(x) for x in xs]
@@ -234,7 +234,7 @@ for k in range(20):
   
   # update
   for p in mlp.parameters():
-    p.data += -0.1 * p.grad
+    p.data += -0.01 * p.grad
   
   print(k, loss.data)
 
