@@ -207,8 +207,10 @@ class MLP:
   def parameters(self):
     return [p for layer in self.layers for p in layer.parameters()]
 
-x = [2.0 , 3.0 , -1.0]
-mlp = MLP(3 , [4 , 4 , 1])
+# x = [2.0 , 3.0 , -1.0]
+mlp = MLP(4 , [5 , 5 , 1])
+
+print(len(mlp.parameters()))
 
 # dot = draw_dot(o)
 # dot.render('computational_graph', view=False, cleanup=True)
@@ -219,9 +221,9 @@ xs = [
   [0.5, 1.0, 1.0],
   [1.0, 1.0, -1.0],
 ]
-ys = [1.0, -1.0, -1.0, 1.0] # desired targets
+ys = [0.5, -0.20, -1.0, 1.0] # desired targets
 
-for k in range(2000):
+for k in range(200):
   
   # forward pass
   ypred = [mlp(x) for x in xs]
