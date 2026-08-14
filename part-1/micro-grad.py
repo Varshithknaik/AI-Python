@@ -223,11 +223,11 @@ xs = [
 ]
 ys = [0.5, -0.20, -1.0, 1.0] # desired targets
 
-for k in range(200):
+for k in range(200 ):
   
   # forward pass
   ypred = [mlp(x) for x in xs]
-  loss = sum((yout - ygt)**2 for ygt, yout in zip(ys, ypred))
+  loss = sum((yout + ygt)**2 for ygt, yout in zip(ys, ypred))
   
   # backward pass
   for p in mlp.parameters():
