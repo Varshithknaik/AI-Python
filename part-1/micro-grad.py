@@ -104,6 +104,29 @@ class Value:
         out._backward = _backward
         return out
 
+    def leakyRelu(self , alpha = 0.01):
+        value = self.data if self.data > 0 else alpha*self.data
+        out = Value(value , (self,) , 'leakyRelu')
+
+        def _backward():
+            local_grad = 1.0 if self.data > 0 else alpha
+            self.grad += local_grad * out.grad
+        out._backward = _backward
+        return out
+    def gelu(self):
+        x = self.data
+        cdf = 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+        pdf = math.exp(-0.5 * x * x) / math.sqrt(2.0 * math.pi)
+
+        out = Value(x * cdf, (self,), "GELU")
+
+        def _backward():
+            local_grad = cdf + x * pdf
+            self.grad += local_grad * out.grad
+
+        out._backward = _backward
+        return out
+          
     def exp(self):
       x = self.data
       out = Value( math.exp(x) , (self,), 'exp')
@@ -111,6 +134,7 @@ class Value:
         self.grad += out.data * out.grad
       out._backward = _backward
       return out
+    
     def backward(self):
       todo = []
       visited = set()
@@ -126,67 +150,31 @@ class Value:
         node._backward()
 
 
-# inputs x1,x2
-# x1 = Value(2.0, label='x1')
-# x2 = Value(0.0, label='x2')
-# # weights w1,w2
-# w1 = Value(-3.0, label='w1')
-# w2 = Value(1.0, label='w2')
-# # bias of the neuron
-# b = Value(6.8813735870195432, label='b')
-# # x1*w1 + x2*w2 + b
-# x1w1 = x1*w1; x1w1.label = 'x1*w1'
-# x2w2 = x2*w2; x2w2.label = 'x2*w2'
-# x1w1x2w2 = x1w1 + x2w2; x1w1x2w2.label = 'x1*w1 + x2*w2'
-# n = x1w1x2w2 + b; n.label = 'n'
-# o = n.tanh(); o.label = 'o'
- 
-# o.backward()
-
-# dot = draw_dot(o)
-# dot.render('computational_graph', view=False, cleanup=True)
-
-# =============***********======================
-
-# inputs x1,x2
-x1 = Value(2.0, label='x1')
-x2 = Value(0.0, label='x2')
-# weights w1,w2
-w1 = Value(-3.0, label='w1')
-w2 = Value(1.0, label='w2')
-# bias of the neuron
-b = Value(6.8813735870195432, label='b')
-# x1*w1 + x2*w2 + b
-x1w1 = x1*w1; x1w1.label = 'x1*w1'
-x2w2 = x2*w2; x2w2.label = 'x2*w2'
-x1w1x2w2 = x1w1 + x2w2; x1w1x2w2.label = 'x1*w1 + x2*w2'
-n = x1w1x2w2 + b; n.label = 'n'
-
-# ====
-e = (2*n).exp() ;e.label = 'e'  
-o = (e - 1) / (e + 1) ;o.label = 'o'
-# ====
-o.backward()
-
-dot = draw_dot(o)
-dot.render('computational_graph', view=False, cleanup=True)
-
 
 class Neuron:
-  def __init__(self , nin):
+  def __init__(self , nin , activation = "tanh"):
     self.w = [Value(random.uniform(-1, 1)) for _ in range(nin)]
     self.b = Value(random.uniform(-1, 1))
+    self.activation = activation
 
   def __call__(self, x):
     act = sum((wi*xi for wi, xi in zip(self.w , x)) , self.b)
-    out = act.tanh()
-    return out
+    if self.activation == "tanh":
+      return act.tanh()
+    elif self.activation == "leakyRelu":
+      return act.leakyRelu()
+    elif self.activation == "gelu":
+      return act.gelu()
+    elif self.activation == "linear":
+      return act
+    else:
+      raise ValueError("Invalid activation function")
 
   def parameters(self):
     return self.w + [self.b]
 class Layer:
-  def __init__(self , nin, nout):
-    self.neurons = [Neuron(nin) for _ in range(nout)]
+  def __init__(self , nin, nout , activation):
+    self.neurons = [Neuron(nin , activation=activation) for _ in range(nout)]
   def __call__(self, x):
     outs =  [n(x) for n in self.neurons]
     return outs[0] if len(outs) == 1 else outs
@@ -195,9 +183,10 @@ class Layer:
     return [ p for neuron in self.neurons for p in neuron.parameters() ]
 
 class MLP:
-  def __init__(self, nin, nouts):
+  def __init__(self, nin, nouts, hidden_activation="gelu" , output_activation="linear"):
     sz = [nin] + nouts
-    self.layers = [Layer(sz[i], sz[i+1]) for i in range(len(sz)-1)]
+    activation = ([hidden_activation]* (len(nouts) - 1) ) + [output_activation]
+    self.layers = [Layer(sz[i], sz[i+1] , activation[i]) for i in range(len(sz)-1)]
 
   def __call__(self, x):
     for layer in self.layers:
@@ -221,13 +210,13 @@ xs = [
   [0.5, 1.0, 1.0],
   [1.0, 1.0, -1.0],
 ]
-ys = [0.5, -0.20, -1.0, 1.0] # desired targets
+ys = [5., -0.20, -5.0, 1.0] # desired targets
 
 for k in range(200 ):
   
   # forward pass
   ypred = [mlp(x) for x in xs]
-  loss = sum((yout + ygt)**2 for ygt, yout in zip(ys, ypred))
+  loss = sum((yout - ygt)**2 for ygt, yout in zip(ys, ypred))
   
   # backward pass
   for p in mlp.parameters():
@@ -236,7 +225,7 @@ for k in range(200 ):
   
   # update
   for p in mlp.parameters():
-    p.data += -0.01 * p.grad
+    p.data += -0.005 * p.grad
   
   print(k, loss.data)
 
